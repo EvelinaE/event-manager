@@ -1,70 +1,104 @@
-// Import necessary modules
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors'); // Import the cors middleware
-const { MongoClient, ObjectId } = require("mongodb"); // import ObjectId
+const cors = require('cors');
+const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-// Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+
+const client = new MongoClient('mongodb://127.0.0.1:27017', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
-const client = new MongoClient('mongodb://127.0.0.1:27017');
+client.connect().then(() => {
+  console.log('Connected to MongoDB');
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}).catch(err => console.error(err));
 
-app.route('/api/user')
-.get(async(req, res) => {
+// GET /api/user/:userId
+app.get('/api/user/:userId', async (req, res) => {
   try {
-    if (!req.query.userId) {
-      res.status(400).send('userId required')
+    const userId = req.params.userId;
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).send({ error: 'Invalid userId format' });
+    }
+    const query = { _id: new ObjectId(userId) };
+    const user = await client.db("atsiskaitymas").collection("user-list").findOne(query);
+    if (!user) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+    res.status(200).send(user);
+  } catch (error) {
+    res.status(400).send(error);
+  }
+});
+
+// POST /api/user
+app.post('/api/user', async (req, res) => {
+  try {
+    const newUserJson = req.body;
+    const data = await client.db("atsiskaitymas").collection("user-list").insertOne(newUserJson);
+    res.status(200).send(data);
+  } catch (error) {
+    res.status(400).send(error);
+  }
+});
+
+// PUT /api/user
+app.put('/api/user', async (req, res) => {
+  try {
+    const { userId, ...updateData } = req.body;
+    console.log('Received update request:', { userId, updateData }); // Log the received data
+    if (!ObjectId.isValid(userId)) {
+      console.error('Invalid userId format:', userId); // Log invalid userId format
+      return res.status(400).send({ error: 'Invalid userId format' });
+    }
+    const query = { _id: new ObjectId(userId) };
+    const update = { $set: updateData };
+    console.log('Query:', query); // Log the query
+
+    const result = await client.db("atsiskaitymas").collection("user-list").updateOne(query, update);
+    if (result.matchedCount === 0) {
+      console.error('User not found:', userId); // Log user not found
+      return res.status(404).send({ error: 'User not found' });
     }
 
-    const query = new ObjectId(req.query.userId);
-    const con = await client.connect();
-    const data = await con.db("atsiskaitymas").collection("user-list").find(query).toArray();
-    await con.close();
-
-    res.status(200).send(data);
+    const updatedUser = await client.db("atsiskaitymas").collection("user-list").findOne(query);
+    console.log('Updated user:', updatedUser); // Log the updated user
+    res.status(200).send(updatedUser);
   } catch (error) {
+    console.error('Update error:', error); // Log the error
     res.status(400).send(error);
   }
-})
-.post(async(req, res) => {
-  try {
-    // if (!req.query.userId) {
-    //   res.status(400).send('userId required')
-    // }
-    const newUserJson = req.body
-
-    const con = await client.connect();
-    const data = await con.db("atsiskaitymas").collection("user-list").insertOne(newUserJson)
-    await con.close();
-
-    res.status(200).send(data);
-  } catch (error) {
-    res.status(400).send(error);
-  }
-})
-.put(async(req, res) => {
-  res.status(200).json({ message: 'put' });
-})
-.delete(async(req, res) => {
-  res.status(200).json({ message: 'delete' });
 });
 
-app.route('/api/users')
-.get(async(req, res) => {
+// DELETE /api/user
+app.delete('/api/user', async (req, res) => {
   try {
-    const con = await client.connect();
-    const data = await con.db("atsiskaitymas").collection("user-list").find().toArray();
-    await con.close();
+    const { userId } = req.body;
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).send({ error: 'Invalid userId format' });
+    }
+    const query = { _id: new ObjectId(userId) };
+    const data = await client.db("atsiskaitymas").collection("user-list").deleteOne(query);
+    res.status(200).send(data);
+  } catch (error) {
+    res.status(400).send(error);
+  }
+});
 
+// GET /api/users
+app.get('/api/users', async (req, res) => {
+  try {
+    const data = await client.db("atsiskaitymas").collection("user-list").find().toArray();
     res.send(data);
   } catch (error) {
     res.status(400).send(error);
   }
-})
+});
