@@ -1,0 +1,22 @@
+.custom-button {
+  background-color: #3C5B6F; 
+  color: #DFD0B8; 
+  font-family: 'Lato', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 12px; 
+  padding: 10px 20px;
+  cursor: pointer;
+  box-shadow: 0px 8px 16px rgba(60, 91, 111, 0.5); 
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.1s ease;
+}
+
+.custom-button:hover {
+  background-color: #517B91; 
+  box-shadow: 0px 10px 20px rgba(60, 91, 111, 0.7);
+}
+
+.custom-button.jumped {
+  transform: translateY(-5px);
+}

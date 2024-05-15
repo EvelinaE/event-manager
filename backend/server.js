@@ -1,84 +1,76 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { MongoClient, ObjectId } = require("mongodb");
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
+
 app.use(bodyParser.json());
 app.use(cors());
 
-const PORT = process.env.PORT || 3000;
+const API_SERVER_PORT = process.env.ApiServerPort;
+const MONGODB_URI = process.env.MongoDbUri;
 
-const client = new MongoClient('mongodb://127.0.0.1:27017', {
+const client = new MongoClient(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-client.connect().then(() => {
-  console.log('Connected to MongoDB');
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+client.connect()
+  .then(() => {
+    console.log('Connected to MongoDB');
+  })
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
   });
-}).catch(err => console.error(err));
 
-// GET /api/user/:userId
-app.get('/api/user/:userId', async (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
-    const userId = req.params.userId;
-    if (!ObjectId.isValid(userId)) {
-      return res.status(400).send({ error: 'Invalid userId format' });
-    }
-    const query = { _id: new ObjectId(userId) };
-    const user = await client.db("atsiskaitymas").collection("user-list").findOne(query);
-    if (!user) {
-      return res.status(404).send({ error: 'User not found' });
-    }
-    res.status(200).send(user);
+    const users = await client.db('atsiskaitymas').collection('user-list').find().toArray();
+    res.status(200).json(users);
   } catch (error) {
-    res.status(400).send(error);
+    console.error('Error fetching users:', error);
+    res.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
-// POST /api/user
 app.post('/api/user', async (req, res) => {
   try {
-    const newUserJson = req.body;
-    const data = await client.db("atsiskaitymas").collection("user-list").insertOne(newUserJson);
-    res.status(200).send(data);
+    const newUser = req.body;
+    const result = await client.db('atsiskaitymas').collection('user-list').insertOne(newUser);
+    if (result.insertedId) {
+      res.status(201).json({ ...newUser, message: 'You successfully registered the user!' });
+    } else {
+      res.status(500).json({ error: 'Oops! Something went wrong while creating the user.' });
+    }
   } catch (error) {
-    res.status(400).send(error);
+    console.error('Error inserting user:', error);
+    res.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
-// PUT /api/user
 app.put('/api/user', async (req, res) => {
   try {
-    const { userId, ...updateData } = req.body;
-    console.log('Received update request:', { userId, updateData }); // Log the received data
-    if (!ObjectId.isValid(userId)) {
-      console.error('Invalid userId format:', userId); // Log invalid userId format
+    const { _id, ...updateData } = req.body;
+    if (!ObjectId.isValid(_id)) {
       return res.status(400).send({ error: 'Invalid userId format' });
     }
-    const query = { _id: new ObjectId(userId) };
+    const query = { _id: new ObjectId(_id) };
     const update = { $set: updateData };
-    console.log('Query:', query); // Log the query
-
-    const result = await client.db("atsiskaitymas").collection("user-list").updateOne(query, update);
+    const result = await client.db('atsiskaitymas').collection('user-list').updateOne(query, update);
     if (result.matchedCount === 0) {
-      console.error('User not found:', userId); // Log user not found
       return res.status(404).send({ error: 'User not found' });
     }
-
-    const updatedUser = await client.db("atsiskaitymas").collection("user-list").findOne(query);
-    console.log('Updated user:', updatedUser); // Log the updated user
-    res.status(200).send(updatedUser);
+    const updatedUser = await client.db('atsiskaitymas').collection('user-list').findOne(query);
+    res.status(200).json(updatedUser);
   } catch (error) {
-    console.error('Update error:', error); // Log the error
-    res.status(400).send(error);
+    console.error('Error updating user:', error);
+    res.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
-// DELETE /api/user
 app.delete('/api/user', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -86,19 +78,17 @@ app.delete('/api/user', async (req, res) => {
       return res.status(400).send({ error: 'Invalid userId format' });
     }
     const query = { _id: new ObjectId(userId) };
-    const data = await client.db("atsiskaitymas").collection("user-list").deleteOne(query);
-    res.status(200).send(data);
+    const result = await client.db('atsiskaitymas').collection('user-list').deleteOne(query);
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+    res.status(200).send({ message: 'You successfully deleted the user!' });
   } catch (error) {
-    res.status(400).send(error);
+    console.error('Error deleting user:', error);
+    res.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
-// GET /api/users
-app.get('/api/users', async (req, res) => {
-  try {
-    const data = await client.db("atsiskaitymas").collection("user-list").find().toArray();
-    res.send(data);
-  } catch (error) {
-    res.status(400).send(error);
-  }
+app.listen(API_SERVER_PORT, () => {
+  console.log(`Server is running on port ${API_SERVER_PORT}`);
 });
